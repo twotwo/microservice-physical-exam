@@ -11,61 +11,130 @@ left to right direction
 skinparam packageStyle rectangle
 actor patient
 actor doctor
-actor his <<application>>
+actor :clinical information system: as CIS <<application>>
+
 rectangle exam {
-  patient -- (appointment)
-  (appointment) .> (order exams) : include
-  (appointment) .> (payment) : include
-  appointment --> his
+  usecase booking as "1. Booking"
+  usecase examination as "2. Examination"
+  usecase report as "3. Medical Report"
+  
+  patient -- (booking)
+  (booking) .> (order exams) : include
+  (booking) .> (payment) : include
+  booking --> CIS
   patient -- (examination)
   (examination) .> (write medical record) : include
-  (write medical record) --> his
+  (write medical record) --> CIS
   (examination) -- doctor
-  patient -- (read medical report)
-  (read medical report) -- his
+  patient -- (report)
+  (report) -- CIS
 }
 @enduml
 ```
 
 ## Sequence Diagrams
 
-### Appointment
+### 1. Booking
 
 ```plantuml
 @startuml
 autonumber
-patient -> his : Make an Appointment for Exam
-patient <- his : Reservation form Response
-patient -> his : Order an Exam
-patient <- his : Payment form Response
-patient -> his : Pay for the Order
+patient -> CIS : Request for Exam Menu
+patient <- CIS : Response for Exam Menu
+patient -> CIS : Create an Exam Order
+patient <- CIS : Response for Order Creation
+patient -> CIS : Pay for the Order
+patient <- CIS : Response for Payment
 @enduml
 ```
 
-### Examination
+### 2. Examination
 
 ```plantuml
 @startuml
 autonumber
-patient -> doctor : Request Exam xxx
-patient <- doctor : Perform Exam xxx
-his <- doctor : Record Exam xxx
-patient <- doctor : Finish Exam
+patient -> CIS : Checkin
+patient <- CIS : Response for Checkin
+loop till all exams finished
+  patient -> doctor : Request Exam xxx
+  patient <- doctor : Perform Exam xxx
+  CIS <- doctor : Record Exam xxx
+  patient <- doctor : Finish Exam xxx
+end
+patient -> CIS : Checkout
+patient <- CIS : Response for Checkout
 @enduml
 ```
 
-### Medical Report
+### 3. Report
 
 ```plantuml
 @startuml
 autonumber
-patient -> his : Request for Medical Report
-patient <- his : Medical Report Response
+patient -> CIS : Request for Medical Report
+patient <- CIS : Response for Medical Report
 @enduml
+```
+
+## Domain Models
+
+### Models
+
+- `ExamItem` Physical Examination Items, such as General, HEENT and so on
+- `Order` Order for a phicical exam, with state such as init/paid/subscribe/complete
+- `Checklist` Patient's checklist
+
+### DB Schema
+
+```mysql
+-- t_exam_item
++-------------+--------------+--------+-------+-----------------------+--------------+
+| Field       | Type         | Null   | Key   | Default               | Comment      |
+|-------------+--------------+--------+-------+-----------------------+--------------|
+| id          | bigint(20)   | NO     | PRI   | <null>                | 主键ID       |
+| create_time | timestamp    | NO     |       | current_timestamp()   | 创建时间     |
+| update_time | timestamp    | NO     |       | '0000-00-00 00:00:00' | 更新时间     |
+| name        | varchar(255) | NO     |       | <null>                | 体检项目名称 |
+| content     | varchar(512) | NO     |       | <null>                | 具体内容     |
+| price       | bigint(20)   | YES    |       | 0                     | 项目费用     |
++-------------+--------------+--------+-------+-----------------------+--------------+
+
+-- t_order/t_order_item
++-------------+--------------+--------+-------+-----------------------+--------------------------------+
+| Field       | Type         | Null   | Key   | Default               | Comment                        |
+|-------------+--------------+--------+-------+-----------------------+--------------------------------|
+| id          | bigint(20)   | NO     | PRI   | <null>                | 主键ID                         |
+| create_time | timestamp    | NO     |       | current_timestamp()   | 创建时间                       |
+| update_time | timestamp    | NO     |       | '0000-00-00 00:00:00' | 更新时间                       |
+| patient     | varchar(255) | NO     |       | <null>                | 检查者                         |
+| total       | bigint(20)   | YES    |       | 0                     | 订单费用                       |
+| state       | tinyint(4)   | NO     |       | <null>                | 订单状态，详见enums.OrderState |
++-------------+--------------+--------+-------+-----------------------+--------------------------------+
+
++----------+------------+--------+-------+-----------+-----------------+
+| Field    | Type       | Null   | Key   | Default   | Comment         |
+|----------+------------+--------+-------+-----------+-----------------|
+| order_id | bigint(20) | NO     |       | <null>    | 外键-订单ID     |
+| item_id  | bigint(20) | NO     |       | <null>    | 外键-体检项目ID |
++----------+------------+--------+-------+-----------+-----------------+
+
+-- t_checklist
++------------+--------------+--------+-------+---------------------+-----------------+
+| Field      | Type         | Null   | Key   | Default             | Comment         |
+|------------+--------------+--------+-------+---------------------+-----------------|
+| order_id   | bigint(20)   | NO     |       | <null>              | 外键-订单ID     |
+| item_id    | bigint(20)   | NO     |       | <null>              | 外键-体检项目ID |
+| check_time | timestamp    | NO     |       | current_timestamp() | 检查时间        |
+| doctor     | varchar(255) | YES    |       | NULL                | 检查医生        |
+| record     | varchar(512) | YES    |       | NULL                | 检查记录        |
+| state      | tinyint(4)   | YES    |       | NULL                | 项目检查状态，  |
++------------+--------------+--------+-------+---------------------+-----------------+
 ```
 
 ## Environment
 
+Run with `docker-compose up -d`
+
 ### mysql
 
-`docker run -it --network baas --rm mariadb:10.3 mysql -hphysical-exam-mysql -uroot -psecret`
+`docker run -it --network baas --rm mariadb:10.3 mysql -hphysical-exam-mysql -uphysical-exam -pphysical-exam`
