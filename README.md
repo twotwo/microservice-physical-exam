@@ -11,23 +11,27 @@ left to right direction
 skinparam packageStyle rectangle
 actor patient
 actor doctor
-actor :clinical information system: as CIS <<application>>
+actor nurse
+'actor :clinical information system: as CIS <<application>>
 
-rectangle exam {
+rectangle {
   usecase booking as "1. Booking"
-  usecase examination as "2. Examination"
-  usecase report as "3. Medical Report"
-  
   patient -- (booking)
-  (booking) .> (order exams) : include
-  (booking) .> (payment) : include
-  booking --> CIS
+    (booking) .> (order exams) : include
+    (booking) .> (payment) : include
+  booking --> nurse
+
+  usecase examination as "2. Examination"
   patient -- (examination)
-  (examination) .> (write medical record) : include
-  (write medical record) --> CIS
-  (examination) -- doctor
+    (examination) .> (checkin) : include
+  (checkin) --> nurse
+  (examination) --> doctor
+}
+
+rectangle {
+  usecase report as "3. Medical Report"
   patient -- (report)
-  (report) -- CIS
+  (report) -- nurse
 }
 @enduml
 ```
@@ -39,12 +43,12 @@ rectangle exam {
 ```plantuml
 @startuml
 autonumber
-patient -> CIS : Request for Exam Menu
-patient <- CIS : Response for Exam Menu
-patient -> CIS : Create an Exam Order
-patient <- CIS : Response for Order Creation
-patient -> CIS : Pay for the Order
-patient <- CIS : Response for Payment
+patient -> nurse : Request for Exam Menu
+patient <- nurse : Response for Exam Menu
+patient -> nurse : Create an Exam Order
+patient <- nurse : Response for Order Creation
+patient -> nurse : Pay for the Order
+patient <- nurse : Response for Payment
 @enduml
 ```
 
@@ -53,16 +57,15 @@ patient <- CIS : Response for Payment
 ```plantuml
 @startuml
 autonumber
-patient -> CIS : Checkin
-patient <- CIS : Response for Checkin
+patient -> nurse : Checkin
+patient <- nurse : Response with Checklists
 loop till all exams finished
   patient -> doctor : Request Exam xxx
   patient <- doctor : Perform Exam xxx
-  CIS <- doctor : Record Exam xxx
-  patient <- doctor : Finish Exam xxx
+  doctor <- doctor : Record Checklist
 end
-patient -> CIS : Checkout
-patient <- CIS : Response for Checkout
+patient -> nurse : Checkout
+patient <- nurse : Response for Checkout
 @enduml
 ```
 
@@ -71,8 +74,8 @@ patient <- CIS : Response for Checkout
 ```plantuml
 @startuml
 autonumber
-patient -> CIS : Request for Medical Report
-patient <- CIS : Response for Medical Report
+patient -> nurse : Request for Medical Report
+patient <- nurse : Response for Medical Report
 @enduml
 ```
 
@@ -88,47 +91,47 @@ patient <- CIS : Response for Medical Report
 
 ```mysql
 -- t_exam_item
-+-------------+--------------+--------+-------+-----------------------+--------------+
-| Field       | Type         | Null   | Key   | Default               | Comment      |
-|-------------+--------------+--------+-------+-----------------------+--------------|
-| id          | bigint(20)   | NO     | PRI   | <null>                | 主键ID       |
-| create_time | timestamp    | NO     |       | current_timestamp()   | 创建时间     |
-| update_time | timestamp    | NO     |       | '0000-00-00 00:00:00' | 更新时间     |
-| name        | varchar(255) | NO     |       | <null>                | 体检项目名称 |
-| content     | varchar(512) | NO     |       | <null>                | 具体内容     |
-| price       | bigint(20)   | YES    |       | 0                     | 项目费用     |
-+-------------+--------------+--------+-------+-----------------------+--------------+
++-------------+--------------+--------+-------+-----------------------+-------------
+| Field       | Type         | Null   | Key   | Default               | Comment     
+|-------------+--------------+--------+-------+-----------------------+-------------
+| id          | bigint(20)   | NO     | PRI   | <null>                | 主键ID      
+| create_time | timestamp    | NO     |       | current_timestamp()   | 创建时间    
+| update_time | timestamp    | NO     |       | '0000-00-00 00:00:00' | 更新时间    
+| name        | varchar(255) | NO     |       | <null>                | 体检项目名称
+| content     | varchar(512) | NO     |       | <null>                | 具体内容    
+| price       | bigint(20)   | YES    |       | 0                     | 项目费用    
++-------------+--------------+--------+-------+-----------------------+-------------
 
 -- t_order/t_order_item
-+-------------+--------------+--------+-------+-----------------------+--------------------------------+
-| Field       | Type         | Null   | Key   | Default               | Comment                        |
-|-------------+--------------+--------+-------+-----------------------+--------------------------------|
-| id          | bigint(20)   | NO     | PRI   | <null>                | 主键ID                         |
-| create_time | timestamp    | NO     |       | current_timestamp()   | 创建时间                       |
-| update_time | timestamp    | NO     |       | '0000-00-00 00:00:00' | 更新时间                       |
-| patient     | varchar(255) | NO     |       | <null>                | 检查者                         |
-| total       | bigint(20)   | YES    |       | 0                     | 订单费用                       |
-| state       | tinyint(4)   | NO     |       | <null>                | 订单状态，详见enums.OrderState |
-+-------------+--------------+--------+-------+-----------------------+--------------------------------+
++-------------+--------------+--------+-------+-----------------------+-------------------------------
+| Field       | Type         | Null   | Key   | Default               | Comment                       
+|-------------+--------------+--------+-------+-----------------------+-------------------------------
+| id          | bigint(20)   | NO     | PRI   | <null>                | 主键ID                        
+| create_time | timestamp    | NO     |       | current_timestamp()   | 创建时间                      
+| update_time | timestamp    | NO     |       | '0000-00-00 00:00:00' | 更新时间                      
+| patient     | varchar(255) | NO     |       | <null>                | 检查者                        
+| total       | bigint(20)   | YES    |       | 0                     | 订单费用                      
+| state       | tinyint(4)   | NO     |       | <null>                | 订单状态，详见enums.OrderState
++-------------+--------------+--------+-------+-----------------------+-------------------------------
 
-+----------+------------+--------+-------+-----------+-----------------+
-| Field    | Type       | Null   | Key   | Default   | Comment         |
-|----------+------------+--------+-------+-----------+-----------------|
-| order_id | bigint(20) | NO     |       | <null>    | 外键-订单ID     |
-| item_id  | bigint(20) | NO     |       | <null>    | 外键-体检项目ID |
-+----------+------------+--------+-------+-----------+-----------------+
++----------+------------+--------+-------+-----------+----------------
+| Field    | Type       | Null   | Key   | Default   | Comment        
+|----------+------------+--------+-------+-----------+----------------
+| order_id | bigint(20) | NO     |       | <null>    | 外键-订单ID    
+| item_id  | bigint(20) | NO     |       | <null>    | 外键-体检项目ID
++----------+------------+--------+-------+-----------+----------------
 
 -- t_checklist
-+------------+--------------+--------+-------+---------------------+-----------------+
-| Field      | Type         | Null   | Key   | Default             | Comment         |
-|------------+--------------+--------+-------+---------------------+-----------------|
-| order_id   | bigint(20)   | NO     |       | <null>              | 外键-订单ID     |
-| item_id    | bigint(20)   | NO     |       | <null>              | 外键-体检项目ID |
-| check_time | timestamp    | NO     |       | current_timestamp() | 检查时间        |
-| doctor     | varchar(255) | YES    |       | NULL                | 检查医生        |
-| record     | varchar(512) | YES    |       | NULL                | 检查记录        |
-| state      | tinyint(4)   | YES    |       | NULL                | 项目检查状态，  |
-+------------+--------------+--------+-------+---------------------+-----------------+
++------------+--------------+--------+-------+---------------------+----------------
+| Field      | Type         | Null   | Key   | Default             | Comment        
+|------------+--------------+--------+-------+---------------------+----------------
+| order_id   | bigint(20)   | NO     |       | <null>              | 外键-订单ID    
+| item_id    | bigint(20)   | NO     |       | <null>              | 外键-体检项目ID
+| check_time | timestamp    | NO     |       | current_timestamp() | 检查时间       
+| doctor     | varchar(255) | YES    |       | NULL                | 检查医生       
+| record     | varchar(512) | YES    |       | NULL                | 检查记录       
+| state      | tinyint(4)   | YES    |       | NULL                | 项目检查状态， 
++------------+--------------+--------+-------+---------------------+----------------
 ```
 
 ## Environment
